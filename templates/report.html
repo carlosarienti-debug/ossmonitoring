@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OS Monitor — {{ date }}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0a1628;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    header {
+      margin-bottom: 32px;
+    }
+    header h1 { font-size: 1.5rem; font-weight: 700; color: #fff; }
+    header p { font-size: 0.875rem; color: #94a3b8; margin-top: 4px; }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .kpi-card {
+      background: #0f2044;
+      border: 1px solid #1e3a5f;
+      border-radius: 12px;
+      padding: 20px 24px;
+    }
+    .kpi-card .label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #94a3b8;
+      margin-bottom: 8px;
+    }
+    .kpi-card .value {
+      font-size: 2.5rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .kpi-card .delta {
+      font-size: 0.8rem;
+      margin-top: 6px;
+    }
+    .red   { color: #f87171; }
+    .yellow { color: #fbbf24; }
+    .green { color: #4ade80; }
+    .blue  { color: #60a5fa; }
+    .delta.up   { color: #f87171; }
+    .delta.down { color: #4ade80; }
+    .delta.flat { color: #94a3b8; }
+
+    .periods-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .periods-card {
+      background: #0f2044;
+      border: 1px solid #1e3a5f;
+      border-radius: 12px;
+      padding: 20px 24px;
+    }
+    .periods-card h3 {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #94a3b8;
+      margin-bottom: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .period-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #1e3a5f;
+      font-size: 0.9rem;
+    }
+    .period-row:last-child { border-bottom: none; }
+    .period-row .period-label { color: #cbd5e1; }
+    .period-row .period-value { font-weight: 700; }
+
+    .insights-card {
+      background: #0f2044;
+      border: 1px solid #1e3a5f;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 32px;
+    }
+    .insights-card h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #60a5fa;
+    }
+    .insights-body { font-size: 0.9rem; line-height: 1.7; color: #cbd5e1; }
+    .insights-body p { margin-bottom: 12px; }
+    .insights-body strong { color: #fff; }
+
+    .alerts-card {
+      background: #3b0000;
+      border: 1px solid #7f1d1d;
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 32px;
+    }
+    .alerts-card h2 { font-size: 1rem; font-weight: 600; color: #f87171; margin-bottom: 12px; }
+    .alerts-card ul { list-style: none; }
+    .alerts-card li { padding: 6px 0; font-size: 0.9rem; color: #fca5a5; }
+    .alerts-card li::before { content: "⚠ "; }
+
+    footer { font-size: 0.75rem; color: #475569; text-align: center; padding-top: 16px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Dashboard OS, DISS e Casos — Equipe IBM</h1>
+    <p>Gerado em {{ generated_at }} · Referência: {{ date }}</p>
+  </header>
+
+  {% if alerts %}
+  <div class="alerts-card">
+    <h2>Alertas Críticos</h2>
+    <ul>
+      {% for alert in alerts %}
+      <li>{{ alert }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="label">OS com DISS Total</div>
+      <div class="value red">{{ metrics.diss.total | format_number }}</div>
+      {% if metrics.diss.delta is not none %}
+      <div class="delta {{ metrics.diss.delta_class }}">{{ metrics.diss.delta_label }}</div>
+      {% endif %}
+    </div>
+    <div class="kpi-card">
+      <div class="label">OS com PAC Total</div>
+      <div class="value yellow">{{ metrics.pac.total | format_number }}</div>
+      {% if metrics.pac.delta is not none %}
+      <div class="delta {{ metrics.pac.delta_class }}">{{ metrics.pac.delta_label }}</div>
+      {% endif %}
+    </div>
+    <div class="kpi-card">
+      <div class="label">OS Sem Evidência Total</div>
+      <div class="value blue">{{ metrics.sem_evidencia.total | format_number }}</div>
+      {% if metrics.sem_evidencia.delta is not none %}
+      <div class="delta {{ metrics.sem_evidencia.delta_class }}">{{ metrics.sem_evidencia.delta_label }}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if metrics.diss.by_period or metrics.pac.by_period or metrics.sem_evidencia.by_period %}
+  <div class="periods-grid">
+    {% if metrics.diss.by_period %}
+    <div class="periods-card">
+      <h3>DISS por Período</h3>
+      {% for p in metrics.diss.by_period %}
+      <div class="period-row">
+        <span class="period-label">{{ p.label }}</span>
+        <span class="period-value red">{{ p.count | format_number }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if metrics.pac.by_period %}
+    <div class="periods-card">
+      <h3>PAC por Período</h3>
+      {% for p in metrics.pac.by_period %}
+      <div class="period-row">
+        <span class="period-label">{{ p.label }}</span>
+        <span class="period-value yellow">{{ p.count | format_number }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if metrics.sem_evidencia.by_period %}
+    <div class="periods-card">
+      <h3>OS Sem Evidência por Período</h3>
+      {% for p in metrics.sem_evidencia.by_period %}
+      <div class="period-row">
+        <span class="period-label">{{ p.label }}</span>
+        <span class="period-value blue">{{ p.count | format_number }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <div class="insights-card">
+    <h2>Análise IA — Claude Sonnet</h2>
+    <div class="insights-body">{{ insights_html | safe }}</div>
+  </div>
+
+  <footer>SF Monitor · VW Brasil · carlos.Arienti@volkswagen.com.br</footer>
+</body>
+</html>
