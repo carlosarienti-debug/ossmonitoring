@@ -136,6 +136,11 @@ def debug_sf_check():
             "password_len": len(password),
             "token_len": len(token),
             "username_preview": username[:6] + "..." if username else "",
+            "username_has_spaces": username != username.strip(),
+            "password_has_spaces": password != password.strip(),
+            "token_has_spaces": token != token.strip(),
+            "token_first2": token[:2] if token else "",
+            "token_last2": token[-2:] if token else "",
         }
 
 
