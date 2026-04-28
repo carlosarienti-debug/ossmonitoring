@@ -8,7 +8,7 @@ def get_sf_client() -> Salesforce:
         username=os.environ["SF_USERNAME"],
         password=os.environ["SF_PASSWORD"],
         security_token=os.environ["SF_SECURITY_TOKEN"],
-        instance_url="https://crmvw.my.salesforce.com",
+        domain=os.environ.get("SF_DOMAIN", "login"),  # use 'test' for sandbox
     )
 
 
