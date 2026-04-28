@@ -112,6 +112,33 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/debug/sf-check")
+def debug_sf_check():
+    username = os.environ.get("SF_USERNAME", "")
+    password = os.environ.get("SF_PASSWORD", "")
+    token = os.environ.get("SF_SECURITY_TOKEN", "")
+    try:
+        import salesforce_client
+        sf = salesforce_client.get_sf_client()
+        return {
+            "auth": "OK",
+            "instance": sf.sf_instance,
+            "username_len": len(username),
+            "password_len": len(password),
+            "token_len": len(token),
+            "username_preview": username[:6] + "..." if username else "",
+        }
+    except Exception as e:
+        return {
+            "auth": "FAILED",
+            "error": str(e),
+            "username_len": len(username),
+            "password_len": len(password),
+            "token_len": len(token),
+            "username_preview": username[:6] + "..." if username else "",
+        }
+
+
 @app.get("/reports/{report_date}", response_class=HTMLResponse)
 def get_report(report_date: str):
     report_file = STATIC_DIR / f"{report_date}.html"
