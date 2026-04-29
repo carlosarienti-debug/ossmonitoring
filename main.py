@@ -33,7 +33,7 @@ scheduler = AsyncIOScheduler(timezone="America/Sao_Paulo")
 
 async def run_queue_batch():
     """Scheduled job: send next batch from persistent queue."""
-    max_daily = int(os.environ.get("CAMPAIGN_MAX_DAILY", "100"))
+    max_daily = int(os.environ.get("CAMPAIGN_MAX_DAILY", "500"))
     batch, remaining = queue_store.pop_batch(max_daily)
     if not batch:
         log.info("Fila vazia — nenhum envio agendado hoje")
