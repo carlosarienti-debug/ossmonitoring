@@ -136,7 +136,7 @@ async def upload_contacts(
             for c, m in zip(contacts, messages)
         ]
         total = queue_store.add_to_queue(items)
-        max_daily = int(os.environ.get("CAMPAIGN_MAX_DAILY", "100"))
+        max_daily = int(os.environ.get("CAMPAIGN_MAX_DAILY", "500"))
         days = (total + max_daily - 1) // max_daily
         return JSONResponse({
             "mode": "queue",
