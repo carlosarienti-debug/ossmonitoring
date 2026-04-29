@@ -138,7 +138,7 @@ def queue_status():
     size = queue_store.queue_size()
     max_daily = int(os.environ.get("CAMPAIGN_MAX_DAILY", "500"))
     days = (size + max_daily - 1) // max_daily if size > 0 else 0
-    return {"total": size, "max_daily": max_daily, "estimated_days": days}
+    return {"total": size, "max_daily": max_daily, "estimated_days": days, "sent_total": queue_store.sent_count()}
 
 
 @app.post("/queue/clear")
@@ -172,12 +172,14 @@ async def upload_contacts(
             {"phone": c["phone"], "name": c["name"], "message": m}
             for c, m in zip(contacts, messages)
         ]
-        total = queue_store.add_to_queue(items)
+        total, skipped_dup = queue_store.add_to_queue(items)
+        added = len(items) - skipped_dup
         max_daily = int(os.environ.get("CAMPAIGN_MAX_DAILY", "500"))
         days = (total + max_daily - 1) // max_daily
         return JSONResponse({
             "mode": "queue",
-            "added": len(items),
+            "added": added,
+            "skipped_duplicates": skipped_dup,
             "total_in_queue": total,
             "max_daily": max_daily,
             "estimated_days": days,

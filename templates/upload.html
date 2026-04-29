@@ -145,6 +145,10 @@
 
   <div class="queue-status" id="queueStatus">
     <div class="queue-stat">
+      <div class="num" id="qSent">—</div>
+      <div class="label">Enviados</div>
+    </div>
+    <div class="queue-stat">
       <div class="num" id="qTotal">—</div>
       <div class="label">Na fila</div>
     </div>
@@ -235,6 +239,7 @@ https://go.vw.com.br/to/myvw?country=BR</textarea>
     try {
       const r = await fetch('/queue/status');
       const d = await r.json();
+      document.getElementById('qSent').textContent = (d.sent_total || 0).toLocaleString('pt-BR');
       document.getElementById('qTotal').textContent = d.total.toLocaleString('pt-BR');
       document.getElementById('qDaily').textContent = d.max_daily.toLocaleString('pt-BR');
       document.getElementById('qDays').textContent = d.estimated_days;
@@ -278,7 +283,7 @@ https://go.vw.com.br/to/myvw?country=BR</textarea>
       if (data.mode === 'queue') {
         result.innerHTML = `
           <div class="result-card info">
-            <h3>📋 ${data.added.toLocaleString('pt-BR')} contatos adicionados à fila</h3>
+            <h3>📋 ${data.added.toLocaleString('pt-BR')} contatos adicionados à fila${data.skipped_duplicates ? ` · ${data.skipped_duplicates} já enviados (ignorados)` : ''}</h3>
             <div class="stat-row">
               <div class="stat"><div class="n">${data.total_in_queue.toLocaleString('pt-BR')}</div><div class="l">Total na fila</div></div>
               <div class="stat"><div class="n">${data.max_daily}</div><div class="l">Por dia (9h)</div></div>

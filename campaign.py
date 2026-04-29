@@ -181,6 +181,7 @@ async def dispatch_whatsapp(contacts: list[dict], messages: list[str]) -> tuple[
     failed = 0
     skipped_time = 0
     skipped_cap = 0
+    sent_phones: list[str] = []
 
     async with httpx.AsyncClient(timeout=15) as client:
         for contact, message in zip(contacts, messages):
@@ -200,6 +201,7 @@ async def dispatch_whatsapp(contacts: list[dict], messages: list[str]) -> tuple[
                 response.raise_for_status()
                 sent += 1
                 _increment_daily_sent()
+                sent_phones.append(contact["phone"])
                 log.info(f"Enviado para {contact['phone']} ({sent}/{len(contacts)})")
             except Exception as e:
                 log.error(f"Falha ao enviar para {contact['phone']}: {e}")
@@ -214,5 +216,9 @@ async def dispatch_whatsapp(contacts: list[dict], messages: list[str]) -> tuple[
                 log.info(f"Pausa longa ({wait:.0f}s) após {sent} envios")
 
             await asyncio.sleep(wait)
+
+    if sent_phones:
+        import queue_store
+        queue_store.mark_sent(sent_phones)
 
     return sent, failed
