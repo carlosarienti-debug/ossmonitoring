@@ -92,9 +92,8 @@ def personalize_with_claude(template: str, contacts: list[dict]) -> list[str]:
 
     prompt = f"""Você é um especialista em marketing automotivo VW Brasil.
 
-Personalize a mensagem abaixo para cada cliente da lista.
-Use o nome e modelo do veículo. Seja amigável, conciso (máximo 200 chars por mensagem).
-Mantenha o link e o propósito (download do app Meu Volkswagen).
+Substitua SOMENTE as variáveis {{nome}} e {{modelo}} no template abaixo para cada cliente.
+Se o template NÃO contiver {{nome}} ou {{modelo}}, copie o template exatamente como está, sem adicionar nome, saudação personalizada ou qualquer informação extra.
 
 Template base:
 {template}
@@ -103,8 +102,8 @@ Clientes:
 {contacts_str}
 
 Responda APENAS com as mensagens numeradas, uma por linha, sem explicações:
-1. [mensagem personalizada]
-2. [mensagem personalizada]
+1. [mensagem]
+2. [mensagem]
 ..."""
 
     message = _get_client().messages.create(
@@ -131,9 +130,9 @@ Responda APENAS com as mensagens numeradas, uma por linha, sem explicações:
 
 
 DEFAULT_TEMPLATE = (
-    "🚗 Olá, seu Volkswagen tem um acessório incrível no seu celular. "
-    "Com o app *Meu Volkswagen* você agenda revisões, acompanha recalls e acessa "
-    "benefícios exclusivos. Tudo na palma da mão. Baixe grátis 👇\n"
+    "Olá ! Seu Volkswagen merece um app especial. "
+    "Com *Meu Volkswagen* você agenda revisões, acompanha recalls e acessa "
+    "benefícios exclusivos. Baixe grátis 👇\n"
     "https://go.vw.com.br/to/myvw?country=BR"
 )
 
