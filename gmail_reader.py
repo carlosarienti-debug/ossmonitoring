@@ -73,15 +73,28 @@ def fetch_latest_salesforce_report() -> tuple[bytes, str] | None:
 
 def check_connection() -> dict:
     """Test Gmail IMAP connection."""
-    try:
-        gmail = os.environ.get("GMAIL_ADDRESS", "")
-        password = os.environ.get("GMAIL_APP_PASSWORD", "").replace(" ", "")
+    gmail = os.environ.get("GMAIL_ADDRESS", "")
+    password = os.environ.get("GMAIL_APP_PASSWORD", "").replace(" ", "")
 
-        with imaplib.IMAP4_SSL("imap.gmail.com") as imap:
-            imap.login(gmail, password)
-            imap.select("INBOX")
-            _, data = imap.search(None, "ALL")
-            count = len(data[0].split())
-            return {"status": "ok", "inbox_count": count, "account": gmail}
+    debug = {
+        "gmail_len": len(gmail),
+        "password_len": len(password),
+        "gmail_preview": gmail[:8] + "..." if gmail else "(vazio)",
+        "password_empty": password == "",
+    }
+
+    if not gmail or not password:
+        return {"status": "error", "error": "GMAIL_ADDRESS ou GMAIL_APP_PASSWORD não configurados", **debug}
+
+    try:
+        imap = imaplib.IMAP4_SSL("imap.gmail.com", 993)
+        imap.login(gmail, password)
+        imap.select("INBOX")
+        _, data = imap.search(None, "ALL")
+        count = len(data[0].split()) if data[0] else 0
+        imap.logout()
+        return {"status": "ok", "inbox_count": count, "account": gmail, **debug}
+    except imaplib.IMAP4.error as e:
+        return {"status": "error", "error": str(e), **debug}
     except Exception as e:
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": type(e).__name__ + ": " + str(e), **debug}
