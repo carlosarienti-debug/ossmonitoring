@@ -99,7 +99,7 @@ def upload_page():
 @app.get("/queue/status")
 def queue_status():
     size = queue_store.queue_size()
-    max_daily = int(os.environ.get("CAMPAIGN_MAX_DAILY", "100"))
+    max_daily = int(os.environ.get("CAMPAIGN_MAX_DAILY", "500"))
     days = (size + max_daily - 1) // max_daily if size > 0 else 0
     return {"total": size, "max_daily": max_daily, "estimated_days": days}
 
