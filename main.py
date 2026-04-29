@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -14,87 +14,52 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-import salesforce_client
-import claude_analysis
-import report_generator
-import email_sender
+import campaign
+import gmail_reader
 import whatsapp_sender
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).parent / "static" / "reports"
+STATIC_DIR.mkdir(parents=True, exist_ok=True)
 DATA_DIR = Path(__file__).parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
 BASE_URL = os.environ.get("BASE_URL", "http://localhost:8000")
 
-
-def _data_file(ref_date: date) -> Path:
-    return DATA_DIR / f"{ref_date.isoformat()}.json"
-
-
-def _load_metrics(ref_date: date) -> dict | None:
-    p = _data_file(ref_date)
-    if p.exists():
-        return json.loads(p.read_text())
-    return None
-
-
-def _save_metrics(metrics: dict) -> None:
-    p = _data_file(date.fromisoformat(metrics["date"]))
-    p.write_text(json.dumps(metrics, ensure_ascii=False, indent=2))
-
-
-async def run_daily_report(ref_date: date | None = None) -> dict:
-    if ref_date is None:
-        ref_date = date.today()
-
-    log.info(f"Iniciando relatório para {ref_date}")
-
-    sf = salesforce_client.get_sf_client()
-    today_metrics = salesforce_client.fetch_metrics(sf, ref_date)
-    _save_metrics(today_metrics)
-
-    yesterday_metrics = _load_metrics(ref_date - timedelta(days=1))
-
-    analysis = claude_analysis.analyze(today_metrics, yesterday_metrics)
-
-    report_path = report_generator.generate(today_metrics, yesterday_metrics, analysis)
-    report_url = f"{BASE_URL}/reports/{ref_date.isoformat()}"
-
-    try:
-        email_sender.send_report(report_path, ref_date.isoformat(), analysis.get("alerts", []))
-        log.info("E-mail enviado")
-    except Exception as e:
-        log.error(f"Falha no e-mail: {e}")
-
-    try:
-        whatsapp_sender.send_alert(
-            summary=analysis.get("summary_whatsapp", ""),
-            report_url=report_url,
-            date=ref_date.strftime("%d/%m/%Y"),
-            alerts=analysis.get("alerts", []),
-        )
-        log.info("WhatsApp enviado")
-    except Exception as e:
-        log.error(f"Falha no WhatsApp: {e}")
-
-    log.info(f"Relatório concluído: {report_url}")
-    return {"status": "ok", "report_url": report_url, "alerts": analysis.get("alerts", [])}
-
-
 scheduler = AsyncIOScheduler(timezone="America/Sao_Paulo")
+
+
+async def run_campaign_from_gmail():
+    """Scheduled job: read Gmail, parse report, dispatch WhatsApp."""
+    log.info("Iniciando campanha via Gmail")
+    result = gmail_reader.fetch_latest_salesforce_report()
+    if not result:
+        log.warning("Nenhum relatório encontrado no Gmail")
+        return
+    file_bytes, filename = result
+    contacts = campaign.parse_contacts(file_bytes, filename)
+    if not contacts:
+        log.warning("Nenhum contato válido encontrado")
+        return
+    template = os.environ.get(
+        "CAMPAIGN_TEMPLATE",
+        "Olá {nome}! Você adquiriu um {modelo} VW. Já conhece o app Meu Volkswagen? Agende revisões e acesse benefícios: https://meuvw.com.br 🚗"
+    )
+    messages = campaign.personalize_with_claude(template, contacts)
+    sent, failed = await campaign.dispatch_whatsapp(contacts, messages)
+    log.info(f"Campanha concluída: {sent} enviados, {failed} falhas")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    cron_expr = os.environ.get("REPORT_CRON", "0 8 * * 1-5")  # seg-sex 08:00 BRT
+    cron_expr = os.environ.get("CAMPAIGN_CRON", "0 9 * * 1-5")
     parts = cron_expr.split()
     scheduler.add_job(
-        run_daily_report,
+        run_campaign_from_gmail,
         CronTrigger(minute=parts[0], hour=parts[1], day=parts[2], month=parts[3], day_of_week=parts[4]),
-        id="daily_report",
+        id="daily_campaign",
         replace_existing=True,
     )
     scheduler.start()
@@ -103,7 +68,7 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown()
 
 
-app = FastAPI(title="SF Monitor — VW Brasil", lifespan=lifespan)
+app = FastAPI(title="Meu VW Campaign — VW Brasil", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
 
 
@@ -112,49 +77,61 @@ def health():
     return {"status": "ok"}
 
 
-@app.get("/debug/sf-check")
-def debug_sf_check():
-    username = os.environ.get("SF_USERNAME", "")
-    password = os.environ.get("SF_PASSWORD", "")
-    token = os.environ.get("SF_SECURITY_TOKEN", "")
+@app.get("/", response_class=HTMLResponse)
+def upload_page():
+    template_path = Path(__file__).parent / "templates" / "upload.html"
+    return HTMLResponse(content=template_path.read_text(encoding="utf-8"))
+
+
+@app.post("/upload")
+async def upload_contacts(
+    file: UploadFile = File(...),
+    template: str = Form(...),
+    mode: str = Form("preview"),
+):
+    file_bytes = await file.read()
+    if len(file_bytes) == 0:
+        raise HTTPException(status_code=400, detail="Arquivo vazio")
+
     try:
-        import salesforce_client
-        sf = salesforce_client.get_sf_client()
-        return {
-            "auth": "OK",
-            "instance": sf.sf_instance,
-            "username_len": len(username),
-            "password_len": len(password),
-            "token_len": len(token),
-            "username_preview": username[:6] + "..." if username else "",
-        }
+        contacts = campaign.parse_contacts(file_bytes, file.filename)
     except Exception as e:
-        return {
-            "auth": "FAILED",
-            "error": str(e),
-            "username_len": len(username),
-            "password_len": len(password),
-            "token_len": len(token),
-            "username_preview": username[:6] + "..." if username else "",
-            "username_has_spaces": username != username.strip(),
-            "password_has_spaces": password != password.strip(),
-            "token_has_spaces": token != token.strip(),
-            "token_first2": token[:2] if token else "",
-            "token_last2": token[-2:] if token else "",
-        }
+        raise HTTPException(status_code=400, detail=f"Erro ao ler arquivo: {e}")
+
+    if not contacts:
+        raise HTTPException(status_code=400, detail="Nenhum contato válido encontrado. Verifique as colunas: nome, telefone, modelo")
+
+    messages = campaign.personalize_with_claude(template, contacts[:20])
+    # For larger lists use simple substitution
+    if len(contacts) > 20:
+        extra = [campaign.personalize_message(template, c) for c in contacts[20:]]
+        messages = messages + extra
+
+    result_messages = [
+        {"phone": c["phone"], "name": c["name"], "message": m}
+        for c, m in zip(contacts, messages)
+    ]
+
+    sent = 0
+    if mode == "send":
+        sent, _ = await campaign.dispatch_whatsapp(contacts, messages)
+    else:
+        sent = len(contacts)
+
+    return JSONResponse({
+        "sent": sent,
+        "skipped": 0,
+        "mode": mode,
+        "messages": result_messages,
+    })
 
 
-@app.get("/reports/{report_date}", response_class=HTMLResponse)
-def get_report(report_date: str):
-    report_file = STATIC_DIR / f"{report_date}.html"
-    if not report_file.exists():
-        raise HTTPException(status_code=404, detail="Relatório não encontrado")
-    return HTMLResponse(content=report_file.read_text(encoding="utf-8"))
+@app.get("/debug/gmail")
+def debug_gmail():
+    return gmail_reader.check_connection()
 
 
-@app.post("/run")
-async def trigger_report(report_date: str | None = None):
-    """Trigger manual — útil para testes e reprocessamento."""
-    ref = date.fromisoformat(report_date) if report_date else None
-    result = await run_daily_report(ref)
-    return JSONResponse(result)
+@app.post("/campaign/run")
+async def trigger_campaign():
+    await run_campaign_from_gmail()
+    return {"status": "ok"}

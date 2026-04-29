@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Campanha Meu VW — Upload</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0a1628;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .container { width: 100%; max-width: 640px; }
+    h1 { font-size: 1.4rem; font-weight: 700; color: #fff; margin-bottom: 4px; }
+    .subtitle { font-size: 0.875rem; color: #94a3b8; margin-bottom: 32px; }
+
+    .card {
+      background: #0f2044;
+      border: 1px solid #1e3a5f;
+      border-radius: 12px;
+      padding: 28px;
+      margin-bottom: 20px;
+    }
+    .card h2 { font-size: 0.95rem; font-weight: 600; color: #60a5fa; margin-bottom: 16px; }
+
+    .drop-zone {
+      border: 2px dashed #1e3a5f;
+      border-radius: 8px;
+      padding: 40px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s;
+      margin-bottom: 16px;
+    }
+    .drop-zone:hover, .drop-zone.dragover { border-color: #60a5fa; }
+    .drop-zone .icon { font-size: 2rem; margin-bottom: 8px; }
+    .drop-zone p { color: #94a3b8; font-size: 0.875rem; }
+    .drop-zone .file-name { color: #4ade80; font-weight: 600; margin-top: 8px; }
+
+    input[type="file"] { display: none; }
+
+    .field { margin-bottom: 16px; }
+    .field label { display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .field input, .field textarea, .field select {
+      width: 100%;
+      background: #0a1628;
+      border: 1px solid #1e3a5f;
+      border-radius: 6px;
+      padding: 10px 12px;
+      color: #e2e8f0;
+      font-size: 0.9rem;
+    }
+    .field textarea { min-height: 100px; resize: vertical; }
+
+    .btn {
+      width: 100%;
+      padding: 12px;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn:hover { background: #1d4ed8; }
+    .btn:disabled { background: #1e3a5f; color: #475569; cursor: not-allowed; }
+
+    .preview {
+      background: #0a1628;
+      border: 1px solid #1e3a5f;
+      border-radius: 8px;
+      padding: 16px;
+      font-size: 0.8rem;
+      color: #94a3b8;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .preview.show { display: block; }
+    .preview strong { color: #4ade80; }
+
+    .result { margin-top: 20px; display: none; }
+    .result.show { display: block; }
+    .result-card {
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 12px;
+    }
+    .result-card.success { background: #052e16; border: 1px solid #166534; }
+    .result-card.error { background: #3b0000; border: 1px solid #7f1d1d; }
+    .result-card h3 { font-size: 1rem; margin-bottom: 8px; }
+    .result-card.success h3 { color: #4ade80; }
+    .result-card.error h3 { color: #f87171; }
+    .result-card p { font-size: 0.875rem; color: #cbd5e1; }
+
+    .columns-hint { font-size: 0.75rem; color: #475569; margin-top: 8px; }
+    .columns-hint code { background: #1e3a5f; padding: 2px 6px; border-radius: 4px; color: #94a3b8; }
+
+    #loading { display: none; text-align: center; padding: 20px; color: #60a5fa; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>Campanha Meu VW</h1>
+  <p class="subtitle">Upload de lista de compradores → WhatsApp automático</p>
+
+  <div class="card">
+    <h2>1. Arquivo de contatos (CSV ou Excel)</h2>
+    <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+      <div class="icon">📂</div>
+      <p>Arraste o arquivo aqui ou clique para selecionar</p>
+      <p class="file-name" id="fileName"></p>
+    </div>
+    <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" />
+    <div class="columns-hint">
+      Colunas esperadas: <code>nome</code> <code>telefone</code> <code>modelo</code> — outros campos são ignorados
+    </div>
+    <div class="preview" id="preview"></div>
+  </div>
+
+  <div class="card">
+    <h2>2. Mensagem base (Claude vai personalizar por cliente)</h2>
+    <div class="field">
+      <label>Template da mensagem</label>
+      <textarea id="template">Olá {nome}! Você acabou de adquirir um {modelo} VW. Já conhece o app Meu Volkswagen? Com ele você agenda revisões, acompanha recalls e acessa benefícios exclusivos. Baixe agora: https://meuvw.com.br 🚗</textarea>
+    </div>
+    <div class="field">
+      <label>Modo de envio</label>
+      <select id="mode">
+        <option value="preview">Prévia apenas (não envia)</option>
+        <option value="send">Enviar WhatsApp</option>
+      </select>
+    </div>
+  </div>
+
+  <button class="btn" id="sendBtn" onclick="submitCampaign()" disabled>Processar campanha</button>
+
+  <div id="loading">⏳ Processando... aguarde</div>
+
+  <div class="result" id="result"></div>
+</div>
+
+<script>
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  let selectedFile = null;
+
+  fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); handleFile(e.dataTransfer.files[0]); });
+
+  function handleFile(file) {
+    if (!file) return;
+    selectedFile = file;
+    document.getElementById('fileName').textContent = `✓ ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+    document.getElementById('sendBtn').disabled = false;
+    document.getElementById('preview').innerHTML = `<strong>Arquivo selecionado:</strong> ${file.name}`;
+    document.getElementById('preview').classList.add('show');
+  }
+
+  async function submitCampaign() {
+    if (!selectedFile) return;
+    const btn = document.getElementById('sendBtn');
+    const loading = document.getElementById('loading');
+    const result = document.getElementById('result');
+
+    btn.disabled = true;
+    loading.style.display = 'block';
+    result.classList.remove('show');
+
+    const form = new FormData();
+    form.append('file', selectedFile);
+    form.append('template', document.getElementById('template').value);
+    form.append('mode', document.getElementById('mode').value);
+
+    try {
+      const res = await fetch('/upload', { method: 'POST', body: form });
+      const data = await res.json();
+      loading.style.display = 'none';
+      result.classList.add('show');
+
+      if (res.ok) {
+        result.innerHTML = `
+          <div class="result-card success">
+            <h3>✅ ${data.sent} mensagens ${data.mode === 'preview' ? 'em prévia' : 'enviadas'}</h3>
+            <p>${data.skipped} contatos ignorados (telefone inválido)</p>
+          </div>
+          <div style="background:#0f2044;border:1px solid #1e3a5f;border-radius:8px;padding:16px;max-height:400px;overflow-y:auto;">
+            ${data.messages.map(m => `
+              <div style="border-bottom:1px solid #1e3a5f;padding:10px 0;">
+                <div style="font-size:0.8rem;color:#60a5fa;">${m.phone} — ${m.name}</div>
+                <div style="font-size:0.875rem;color:#cbd5e1;margin-top:4px;">${m.message}</div>
+              </div>
+            `).join('')}
+          </div>`;
+      } else {
+        result.innerHTML = `<div class="result-card error"><h3>❌ Erro</h3><p>${data.detail || 'Erro ao processar arquivo'}</p></div>`;
+      }
+    } catch (e) {
+      loading.style.display = 'none';
+      result.classList.add('show');
+      result.innerHTML = `<div class="result-card error"><h3>❌ Erro de conexão</h3><p>${e.message}</p></div>`;
+    }
+
+    btn.disabled = false;
+  }
+</script>
+</body>
+</html>
