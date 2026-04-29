@@ -1,7 +1,6 @@
 import os
 import json
 import logging
-from datetime import date, timedelta
 from pathlib import Path
 from contextlib import asynccontextmanager
 
@@ -17,6 +16,7 @@ load_dotenv()
 import campaign
 import gmail_reader
 import whatsapp_sender
+import queue_store
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -29,6 +29,22 @@ DATA_DIR.mkdir(exist_ok=True)
 BASE_URL = os.environ.get("BASE_URL", "http://localhost:8000")
 
 scheduler = AsyncIOScheduler(timezone="America/Sao_Paulo")
+
+
+async def run_queue_batch():
+    """Scheduled job: send next batch from persistent queue."""
+    max_daily = int(os.environ.get("CAMPAIGN_MAX_DAILY", "100"))
+    batch, remaining = queue_store.pop_batch(max_daily)
+    if not batch:
+        log.info("Fila vazia — nenhum envio agendado hoje")
+        return
+
+    contacts = [{"phone": item["phone"], "name": item["name"], "model": ""} for item in batch]
+    messages = [item["message"] for item in batch]
+
+    log.info(f"Iniciando lote: {len(batch)} mensagens, {remaining} restantes na fila")
+    sent, failed = await campaign.dispatch_whatsapp(contacts, messages)
+    log.info(f"Lote concluído: {sent} enviados, {failed} falhas, {remaining} ainda na fila")
 
 
 async def run_campaign_from_gmail():
@@ -54,9 +70,9 @@ async def lifespan(app: FastAPI):
     cron_expr = os.environ.get("CAMPAIGN_CRON", "0 9 * * 1-5")
     parts = cron_expr.split()
     scheduler.add_job(
-        run_campaign_from_gmail,
+        run_queue_batch,
         CronTrigger(minute=parts[0], hour=parts[1], day=parts[2], month=parts[3], day_of_week=parts[4]),
-        id="daily_campaign",
+        id="daily_queue",
         replace_existing=True,
     )
     scheduler.start()
@@ -71,13 +87,27 @@ app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "queue": queue_store.queue_size()}
 
 
 @app.get("/", response_class=HTMLResponse)
 def upload_page():
     template_path = Path(__file__).parent / "templates" / "upload.html"
     return HTMLResponse(content=template_path.read_text(encoding="utf-8"))
+
+
+@app.get("/queue/status")
+def queue_status():
+    size = queue_store.queue_size()
+    max_daily = int(os.environ.get("CAMPAIGN_MAX_DAILY", "100"))
+    days = (size + max_daily - 1) // max_daily if size > 0 else 0
+    return {"total": size, "max_daily": max_daily, "estimated_days": days}
+
+
+@app.post("/queue/clear")
+def queue_clear():
+    queue_store.clear_queue()
+    return {"status": "ok", "total": 0}
 
 
 @app.post("/upload")
@@ -98,30 +128,45 @@ async def upload_contacts(
     if not contacts:
         raise HTTPException(status_code=400, detail="Nenhum contato válido encontrado. Verifique as colunas: nome, telefone, modelo")
 
-    messages = campaign.personalize_with_claude(template, contacts[:20])
-    # For larger lists use simple substitution
-    if len(contacts) > 20:
-        extra = [campaign.personalize_message(template, c) for c in contacts[20:]]
-        messages = messages + extra
+    messages = campaign.personalize_with_claude(template, contacts)
 
-    result_messages = [
-        {"phone": c["phone"], "name": c["name"], "message": m}
-        for c, m in zip(contacts, messages)
-    ]
+    if mode == "queue":
+        items = [
+            {"phone": c["phone"], "name": c["name"], "message": m}
+            for c, m in zip(contacts, messages)
+        ]
+        total = queue_store.add_to_queue(items)
+        max_daily = int(os.environ.get("CAMPAIGN_MAX_DAILY", "100"))
+        days = (total + max_daily - 1) // max_daily
+        return JSONResponse({
+            "mode": "queue",
+            "added": len(items),
+            "total_in_queue": total,
+            "max_daily": max_daily,
+            "estimated_days": days,
+            "messages": [{"phone": c["phone"], "name": c["name"], "message": m}
+                         for c, m in zip(contacts[:5], messages[:5])],
+        })
 
-    sent = 0
-    failed = 0
-    if mode == "send":
-        sent, failed = await campaign.dispatch_whatsapp(contacts, messages)
-    else:
-        sent = len(contacts)
+    if mode == "preview":
+        return JSONResponse({
+            "mode": "preview",
+            "sent": len(contacts),
+            "failed": 0,
+            "skipped": 0,
+            "messages": [{"phone": c["phone"], "name": c["name"], "message": m}
+                         for c, m in zip(contacts, messages)],
+        })
 
+    # mode == "send" — immediate send (for small lists)
+    sent, failed = await campaign.dispatch_whatsapp(contacts, messages)
     return JSONResponse({
+        "mode": "send",
         "sent": sent,
         "failed": failed,
         "skipped": 0,
-        "mode": mode,
-        "messages": result_messages,
+        "messages": [{"phone": c["phone"], "name": c["name"], "message": m}
+                     for c, m in zip(contacts, messages)],
     })
 
 
@@ -134,3 +179,10 @@ def debug_gmail():
 async def trigger_campaign():
     await run_campaign_from_gmail()
     return {"status": "ok"}
+
+
+@app.post("/queue/run")
+async def trigger_queue():
+    """Manually trigger a queue batch send."""
+    await run_queue_batch()
+    return {"status": "ok", "remaining": queue_store.queue_size()}

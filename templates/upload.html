@@ -18,16 +18,41 @@
     }
     .container { width: 100%; max-width: 640px; }
     h1 { font-size: 1.4rem; font-weight: 700; color: #fff; margin-bottom: 4px; }
-    .subtitle { font-size: 0.875rem; color: #94a3b8; margin-bottom: 32px; }
+    .subtitle { font-size: 0.875rem; color: #94a3b8; margin-bottom: 24px; }
 
     .card {
       background: #0f2044;
       border: 1px solid #1e3a5f;
       border-radius: 12px;
       padding: 28px;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
     }
     .card h2 { font-size: 0.95rem; font-weight: 600; color: #60a5fa; margin-bottom: 16px; }
+
+    .queue-status {
+      background: #0f2044;
+      border: 1px solid #1e3a5f;
+      border-radius: 12px;
+      padding: 20px 28px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .queue-stat { text-align: center; }
+    .queue-stat .num { font-size: 1.8rem; font-weight: 700; color: #60a5fa; }
+    .queue-stat .label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+    .btn-clear {
+      padding: 8px 16px;
+      background: transparent;
+      color: #f87171;
+      border: 1px solid #7f1d1d;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    .btn-clear:hover { background: #3b0000; }
 
     .drop-zone {
       border: 2px dashed #1e3a5f;
@@ -58,6 +83,21 @@
     }
     .field textarea { min-height: 100px; resize: vertical; }
 
+    .mode-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+    .mode-btn {
+      padding: 10px 8px;
+      background: #0a1628;
+      border: 1px solid #1e3a5f;
+      border-radius: 8px;
+      color: #94a3b8;
+      font-size: 0.8rem;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+    }
+    .mode-btn.active { border-color: #2563eb; background: #1e3a5f; color: #fff; }
+    .mode-btn .mode-icon { font-size: 1.2rem; display: block; margin-bottom: 4px; }
+
     .btn {
       width: 100%;
       padding: 12px;
@@ -73,35 +113,27 @@
     .btn:hover { background: #1d4ed8; }
     .btn:disabled { background: #1e3a5f; color: #475569; cursor: not-allowed; }
 
-    .preview {
-      background: #0a1628;
-      border: 1px solid #1e3a5f;
-      border-radius: 8px;
-      padding: 16px;
-      font-size: 0.8rem;
-      color: #94a3b8;
-      margin-bottom: 16px;
-      display: none;
-    }
-    .preview.show { display: block; }
-    .preview strong { color: #4ade80; }
-
-    .result { margin-top: 20px; display: none; }
+    .result { margin-top: 16px; display: none; }
     .result.show { display: block; }
-    .result-card {
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 12px;
-    }
+    .result-card { border-radius: 12px; padding: 20px; margin-bottom: 12px; }
     .result-card.success { background: #052e16; border: 1px solid #166534; }
+    .result-card.info { background: #0c1a3a; border: 1px solid #1e3a8a; }
     .result-card.error { background: #3b0000; border: 1px solid #7f1d1d; }
     .result-card h3 { font-size: 1rem; margin-bottom: 8px; }
     .result-card.success h3 { color: #4ade80; }
+    .result-card.info h3 { color: #60a5fa; }
     .result-card.error h3 { color: #f87171; }
     .result-card p { font-size: 0.875rem; color: #cbd5e1; }
+    .result-card .stat-row { display: flex; gap: 24px; margin-top: 12px; }
+    .result-card .stat { text-align: center; }
+    .result-card .stat .n { font-size: 1.4rem; font-weight: 700; color: #60a5fa; }
+    .result-card .stat .l { font-size: 0.7rem; color: #64748b; text-transform: uppercase; }
 
-    .columns-hint { font-size: 0.75rem; color: #475569; margin-top: 8px; }
-    .columns-hint code { background: #1e3a5f; padding: 2px 6px; border-radius: 4px; color: #94a3b8; }
+    .msg-list { background:#0f2044; border:1px solid #1e3a5f; border-radius:8px; padding:16px; max-height:300px; overflow-y:auto; margin-top:12px; }
+    .msg-item { border-bottom:1px solid #1e3a5f; padding:10px 0; }
+    .msg-item:last-child { border-bottom: none; }
+    .msg-phone { font-size:0.8rem; color:#60a5fa; }
+    .msg-text { font-size:0.875rem; color:#cbd5e1; margin-top:4px; }
 
     #loading { display: none; text-align: center; padding: 20px; color: #60a5fa; }
   </style>
@@ -111,6 +143,22 @@
   <h1>Campanha Meu VW</h1>
   <p class="subtitle">Upload de lista de compradores → WhatsApp automático</p>
 
+  <div class="queue-status" id="queueStatus">
+    <div class="queue-stat">
+      <div class="num" id="qTotal">—</div>
+      <div class="label">Na fila</div>
+    </div>
+    <div class="queue-stat">
+      <div class="num" id="qDaily">—</div>
+      <div class="label">Por dia</div>
+    </div>
+    <div class="queue-stat">
+      <div class="num" id="qDays">—</div>
+      <div class="label">Dias restantes</div>
+    </div>
+    <button class="btn-clear" onclick="clearQueue()">Limpar fila</button>
+  </div>
+
   <div class="card">
     <h2>1. Arquivo de contatos (CSV ou Excel)</h2>
     <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
@@ -119,39 +167,51 @@
       <p class="file-name" id="fileName"></p>
     </div>
     <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" />
-    <div class="columns-hint">
-      Colunas esperadas: <code>nome</code> <code>telefone</code> <code>modelo</code> — outros campos são ignorados
+    <div style="font-size:0.75rem;color:#475569;margin-top:4px;">
+      Colunas esperadas: <code style="background:#1e3a5f;padding:2px 6px;border-radius:4px;color:#94a3b8;">nome</code>
+      <code style="background:#1e3a5f;padding:2px 6px;border-radius:4px;color:#94a3b8;">telefone</code>
+      <code style="background:#1e3a5f;padding:2px 6px;border-radius:4px;color:#94a3b8;">modelo</code>
     </div>
-    <div class="preview" id="preview"></div>
   </div>
 
   <div class="card">
-    <h2>2. Mensagem base (Claude vai personalizar por cliente)</h2>
+    <h2>2. Mensagem base</h2>
     <div class="field">
       <label>Template da mensagem</label>
       <textarea id="template">Olá ! Seu Volkswagen merece um app especial. Com *Meu Volkswagen* você agenda revisões, acompanha recalls e acessa benefícios exclusivos. Baixe grátis 👇
 https://go.vw.com.br/to/myvw?country=BR</textarea>
     </div>
+
     <div class="field">
       <label>Modo de envio</label>
-      <select id="mode">
-        <option value="preview">Prévia apenas (não envia)</option>
-        <option value="send">Enviar WhatsApp</option>
-      </select>
+      <div class="mode-grid">
+        <div class="mode-btn active" id="modePreview" onclick="setMode('preview')">
+          <span class="mode-icon">👁</span>Prévia
+        </div>
+        <div class="mode-btn" id="modeQueue" onclick="setMode('queue')">
+          <span class="mode-icon">📋</span>Adicionar à fila
+        </div>
+        <div class="mode-btn" id="modeSend" onclick="setMode('send')">
+          <span class="mode-icon">🚀</span>Enviar agora
+        </div>
+      </div>
+      <div style="font-size:0.75rem;color:#475569;">
+        <b style="color:#60a5fa;">Fila:</b> salva os contatos e envia <b id="hintDaily">100</b>/dia às 9h (seg-sex). Ideal para listas grandes.
+      </div>
     </div>
   </div>
 
   <button class="btn" id="sendBtn" onclick="submitCampaign()" disabled>Processar campanha</button>
-
   <div id="loading">⏳ Processando... aguarde</div>
-
   <div class="result" id="result"></div>
 </div>
 
 <script>
+  let selectedMode = 'preview';
+  let selectedFile = null;
+
   const dropZone = document.getElementById('dropZone');
   const fileInput = document.getElementById('fileInput');
-  let selectedFile = null;
 
   fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
   dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
@@ -163,8 +223,29 @@ https://go.vw.com.br/to/myvw?country=BR</textarea>
     selectedFile = file;
     document.getElementById('fileName').textContent = `✓ ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
     document.getElementById('sendBtn').disabled = false;
-    document.getElementById('preview').innerHTML = `<strong>Arquivo selecionado:</strong> ${file.name}`;
-    document.getElementById('preview').classList.add('show');
+  }
+
+  function setMode(mode) {
+    selectedMode = mode;
+    ['preview','queue','send'].forEach(m => document.getElementById('mode'+m.charAt(0).toUpperCase()+m.slice(1)).classList.remove('active'));
+    document.getElementById('mode'+mode.charAt(0).toUpperCase()+mode.slice(1)).classList.add('active');
+  }
+
+  async function loadQueueStatus() {
+    try {
+      const r = await fetch('/queue/status');
+      const d = await r.json();
+      document.getElementById('qTotal').textContent = d.total.toLocaleString('pt-BR');
+      document.getElementById('qDaily').textContent = d.max_daily.toLocaleString('pt-BR');
+      document.getElementById('qDays').textContent = d.estimated_days;
+      document.getElementById('hintDaily').textContent = d.max_daily;
+    } catch(e) {}
+  }
+
+  async function clearQueue() {
+    if (!confirm('Limpar toda a fila? Esta ação não pode ser desfeita.')) return;
+    await fetch('/queue/clear', { method: 'POST' });
+    loadQueueStatus();
   }
 
   async function submitCampaign() {
@@ -180,30 +261,61 @@ https://go.vw.com.br/to/myvw?country=BR</textarea>
     const form = new FormData();
     form.append('file', selectedFile);
     form.append('template', document.getElementById('template').value);
-    form.append('mode', document.getElementById('mode').value);
+    form.append('mode', selectedMode);
 
     try {
       const res = await fetch('/upload', { method: 'POST', body: form });
       const data = await res.json();
       loading.style.display = 'none';
       result.classList.add('show');
+      loadQueueStatus();
 
-      if (res.ok) {
+      if (!res.ok) {
+        result.innerHTML = `<div class="result-card error"><h3>❌ Erro</h3><p>${data.detail || 'Erro ao processar'}</p></div>`;
+        return;
+      }
+
+      if (data.mode === 'queue') {
+        result.innerHTML = `
+          <div class="result-card info">
+            <h3>📋 ${data.added.toLocaleString('pt-BR')} contatos adicionados à fila</h3>
+            <div class="stat-row">
+              <div class="stat"><div class="n">${data.total_in_queue.toLocaleString('pt-BR')}</div><div class="l">Total na fila</div></div>
+              <div class="stat"><div class="n">${data.max_daily}</div><div class="l">Por dia (9h)</div></div>
+              <div class="stat"><div class="n">~${data.estimated_days}</div><div class="l">Dias</div></div>
+            </div>
+          </div>
+          <div style="font-size:0.8rem;color:#64748b;padding:8px 0;">Amostra das primeiras 5 mensagens:</div>
+          <div class="msg-list">${data.messages.map(m => `
+            <div class="msg-item">
+              <div class="msg-phone">${m.phone} — ${m.name}</div>
+              <div class="msg-text">${m.message}</div>
+            </div>`).join('')}
+          </div>`;
+      } else if (data.mode === 'preview') {
         result.innerHTML = `
           <div class="result-card success">
-            <h3>✅ ${data.sent} mensagens ${data.mode === 'preview' ? 'em prévia' : 'enviadas'}</h3>
-            <p>${data.skipped} ignorados (telefone inválido)${data.failed ? ` · ${data.failed} falhas de envio` : ''}</p>
+            <h3>👁 Prévia — ${data.sent} contatos</h3>
+            <p>Nenhuma mensagem enviada.</p>
           </div>
-          <div style="background:#0f2044;border:1px solid #1e3a5f;border-radius:8px;padding:16px;max-height:400px;overflow-y:auto;">
-            ${data.messages.map(m => `
-              <div style="border-bottom:1px solid #1e3a5f;padding:10px 0;">
-                <div style="font-size:0.8rem;color:#60a5fa;">${m.phone} — ${m.name}</div>
-                <div style="font-size:0.875rem;color:#cbd5e1;margin-top:4px;">${m.message}</div>
-              </div>
-            `).join('')}
+          <div class="msg-list">${data.messages.map(m => `
+            <div class="msg-item">
+              <div class="msg-phone">${m.phone} — ${m.name}</div>
+              <div class="msg-text">${m.message}</div>
+            </div>`).join('')}
           </div>`;
       } else {
-        result.innerHTML = `<div class="result-card error"><h3>❌ Erro</h3><p>${data.detail || 'Erro ao processar arquivo'}</p></div>`;
+        result.innerHTML = `
+          <div class="result-card success">
+            <h3>✅ ${data.sent} mensagens enviadas</h3>
+            <p>${data.failed ? `${data.failed} falhas de envio.` : ''}</p>
+          </div>
+          <div class="msg-list">${data.messages.map(m => `
+            <div class="msg-item">
+              <div class="msg-phone">${m.phone} — ${m.name}</div>
+              <div class="msg-text">${m.message}</div>
+            </div>`).join('')}
+          </div>`;
       }
     } catch (e) {
       loading.style.display = 'none';
@@ -213,6 +325,8 @@ https://go.vw.com.br/to/myvw?country=BR</textarea>
 
     btn.disabled = false;
   }
+
+  loadQueueStatus();
 </script>
 </body>
 </html>
