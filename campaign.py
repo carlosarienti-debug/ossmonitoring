@@ -128,8 +128,8 @@ Responda APENAS com as mensagens numeradas, uma por linha, sem explicações:
 
 
 DEFAULT_TEMPLATE = (
-    "🚗 Olá, {nome}! Seu {modelo} VW acabou de sair da concessionária — mas a experiência começa agora "
-    "no seu celular. Com o app *Meu Volkswagen* você agenda revisões, acompanha recalls e acessa "
+    "🚗 Olá, seu Volkswagen tem um acessório incrível no seu celular. "
+    "Com o app *Meu Volkswagen* você agenda revisões, acompanha recalls e acessa "
     "benefícios exclusivos. Tudo na palma da mão. Baixe grátis 👇\n"
     "https://go.vw.com.br/to/myvw?country=BR"
 )
