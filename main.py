@@ -31,20 +31,57 @@ BASE_URL = os.environ.get("BASE_URL", "http://localhost:8000")
 scheduler = AsyncIOScheduler(timezone="America/Sao_Paulo")
 
 
+async def _send_report_whatsapp(text: str):
+    """Send a report message to WHATSAPP_PHONE via Evolution API."""
+    try:
+        base_url = os.environ["EVOLUTION_API_URL"].rstrip("/")
+        api_key = os.environ["EVOLUTION_API_KEY"]
+        instance = os.environ["EVOLUTION_INSTANCE"]
+        phone = os.environ.get("WHATSAPP_PHONE", "")
+        if not phone:
+            return
+        import httpx
+        async with httpx.AsyncClient(timeout=15) as client:
+            await client.post(
+                f"{base_url}/message/sendText/{instance}",
+                headers={"apikey": api_key, "Content-Type": "application/json"},
+                json={"number": phone, "text": text},
+            )
+    except Exception as e:
+        log.error(f"Falha ao enviar relatório WhatsApp: {e}")
+
+
 async def run_queue_batch():
     """Scheduled job: send next batch from persistent queue."""
+    from datetime import date, timedelta
     max_daily = int(os.environ.get("CAMPAIGN_MAX_DAILY", "500"))
     batch, remaining = queue_store.pop_batch(max_daily)
     if not batch:
         log.info("Fila vazia — nenhum envio agendado hoje")
+        await _send_report_whatsapp("📋 *Campanha Meu VW* — Fila vazia, nenhum envio hoje.")
         return
 
+    total_original = remaining + len(batch)
     contacts = [{"phone": item["phone"], "name": item["name"], "model": ""} for item in batch]
     messages = [item["message"] for item in batch]
 
     log.info(f"Iniciando lote: {len(batch)} mensagens, {remaining} restantes na fila")
     sent, failed = await campaign.dispatch_whatsapp(contacts, messages)
     log.info(f"Lote concluído: {sent} enviados, {failed} falhas, {remaining} ainda na fila")
+
+    progress = round((1 - remaining / total_original) * 100) if total_original > 0 else 100
+    days_left = -(-remaining // max_daily) if remaining > 0 else 0
+    conclusion = (date.today() + timedelta(days=days_left)).strftime("%d/%m/%Y") if days_left > 0 else "Hoje"
+
+    report = (
+        f"📊 *Campanha Meu VW — Relatório Diário*\n\n"
+        f"✅ Enviados hoje: {sent}\n"
+        f"❌ Falhas: {failed}\n"
+        f"📋 Restantes na fila: {remaining:,}\n"
+        f"📈 Progresso: {progress}% concluído\n"
+        f"⏱ Previsão de conclusão: {conclusion}"
+    )
+    await _send_report_whatsapp(report)
 
 
 async def run_campaign_from_gmail():
