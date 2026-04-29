@@ -2,6 +2,7 @@ import io
 import re
 import asyncio
 import logging
+import random
 import pandas as pd
 import anthropic
 import os
@@ -172,8 +173,9 @@ async def dispatch_whatsapp(contacts: list[dict], messages: list[str]) -> tuple[
     api_key = os.environ["EVOLUTION_API_KEY"]
     instance = os.environ["EVOLUTION_INSTANCE"]
 
-    max_daily = int(os.environ.get("CAMPAIGN_MAX_DAILY", "100"))
-    interval_secs = float(os.environ.get("CAMPAIGN_INTERVAL_SECS", "3"))
+    max_daily = int(os.environ.get("CAMPAIGN_MAX_DAILY", "500"))
+    interval_min = float(os.environ.get("CAMPAIGN_INTERVAL_MIN", "8"))
+    interval_max = float(os.environ.get("CAMPAIGN_INTERVAL_MAX", "25"))
 
     sent = 0
     failed = 0
@@ -198,11 +200,19 @@ async def dispatch_whatsapp(contacts: list[dict], messages: list[str]) -> tuple[
                 response.raise_for_status()
                 sent += 1
                 _increment_daily_sent()
-                log.info(f"Enviado para {contact['phone']}")
+                log.info(f"Enviado para {contact['phone']} ({sent}/{len(contacts)})")
             except Exception as e:
                 log.error(f"Falha ao enviar para {contact['phone']}: {e}")
                 failed += 1
 
-            await asyncio.sleep(interval_secs)
+            # Intervalo aleatório entre mensagens (comportamento humano)
+            wait = random.uniform(interval_min, interval_max)
+
+            # A cada 20-30 envios, pausa maior simulando distração humana
+            if sent > 0 and sent % random.randint(20, 30) == 0:
+                wait += random.uniform(60, 180)
+                log.info(f"Pausa longa ({wait:.0f}s) após {sent} envios")
+
+            await asyncio.sleep(wait)
 
     return sent, failed
