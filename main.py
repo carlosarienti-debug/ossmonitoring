@@ -1,5 +1,4 @@
 import os
-import json
 import logging
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -15,7 +14,6 @@ load_dotenv()
 
 import campaign
 import gmail_reader
-import whatsapp_sender
 import queue_store
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -58,7 +56,6 @@ async def run_queue_batch():
     batch, remaining = queue_store.pop_batch(max_daily)
     if not batch:
         log.info("Fila vazia — nenhum envio agendado hoje")
-        await _send_report_whatsapp("📋 *Campanha Meu VW* — Fila vazia, nenhum envio hoje.")
         return
 
     total_original = remaining + len(batch)
