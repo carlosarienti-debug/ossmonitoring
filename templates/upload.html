@@ -192,7 +192,7 @@ https://go.vw.com.br/to/myvw?country=BR</textarea>
         result.innerHTML = `
           <div class="result-card success">
             <h3>✅ ${data.sent} mensagens ${data.mode === 'preview' ? 'em prévia' : 'enviadas'}</h3>
-            <p>${data.skipped} contatos ignorados (telefone inválido)</p>
+            <p>${data.skipped} ignorados (telefone inválido)${data.failed ? ` · ${data.failed} falhas de envio` : ''}</p>
           </div>
           <div style="background:#0f2044;border:1px solid #1e3a5f;border-radius:8px;padding:16px;max-height:400px;overflow-y:auto;">
             ${data.messages.map(m => `

@@ -1,10 +1,13 @@
 import io
 import re
 import asyncio
+import logging
 import pandas as pd
 import anthropic
 import os
 import httpx
+
+log = logging.getLogger(__name__)
 
 _client = None
 
@@ -192,7 +195,9 @@ async def dispatch_whatsapp(contacts: list[dict], messages: list[str]) -> tuple[
                 response.raise_for_status()
                 sent += 1
                 _increment_daily_sent()
-            except Exception:
+                log.info(f"Enviado para {contact['phone']}")
+            except Exception as e:
+                log.error(f"Falha ao enviar para {contact['phone']}: {e}")
                 failed += 1
 
             await asyncio.sleep(interval_secs)

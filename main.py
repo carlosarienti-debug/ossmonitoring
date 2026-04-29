@@ -110,13 +110,15 @@ async def upload_contacts(
     ]
 
     sent = 0
+    failed = 0
     if mode == "send":
-        sent, _ = await campaign.dispatch_whatsapp(contacts, messages)
+        sent, failed = await campaign.dispatch_whatsapp(contacts, messages)
     else:
         sent = len(contacts)
 
     return JSONResponse({
         "sent": sent,
+        "failed": failed,
         "skipped": 0,
         "mode": mode,
         "messages": result_messages,
