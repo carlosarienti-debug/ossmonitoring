@@ -85,6 +85,10 @@ def personalize_with_claude(template: str, contacts: list[dict]) -> list[str]:
     if not contacts:
         return []
 
+    # Skip Claude if template has no placeholders — just use direct substitution
+    if "{nome}" not in template and "{modelo}" not in template and "{name}" not in template:
+        return [personalize_message(template, c) for c in contacts]
+
     contacts_str = "\n".join(
         f"{i+1}. Nome: {c['name']}, Modelo: {c['model'] or 'VW'}"
         for i, c in enumerate(contacts[:20])
