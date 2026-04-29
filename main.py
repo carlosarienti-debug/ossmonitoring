@@ -43,10 +43,7 @@ async def run_campaign_from_gmail():
     if not contacts:
         log.warning("Nenhum contato válido encontrado")
         return
-    template = os.environ.get(
-        "CAMPAIGN_TEMPLATE",
-        "Olá {nome}! Você adquiriu um {modelo} VW. Já conhece o app Meu Volkswagen? Agende revisões e acesse benefícios: https://meuvw.com.br 🚗"
-    )
+    template = os.environ.get("CAMPAIGN_TEMPLATE", campaign.DEFAULT_TEMPLATE)
     messages = campaign.personalize_with_claude(template, contacts)
     sent, failed = await campaign.dispatch_whatsapp(contacts, messages)
     log.info(f"Campanha concluída: {sent} enviados, {failed} falhas")

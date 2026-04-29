@@ -127,17 +127,63 @@ Responda APENAS com as mensagens numeradas, uma por linha, sem explicações:
     return messages[:len(contacts)]
 
 
+DEFAULT_TEMPLATE = (
+    "🚗 Olá, {nome}! Seu {modelo} VW acabou de sair da concessionária — mas a experiência começa agora "
+    "no seu celular. Com o app *Meu Volkswagen* você agenda revisões, acompanha recalls e acessa "
+    "benefícios exclusivos. Tudo na palma da mão. Baixe grátis 👇\n"
+    "https://go.vw.com.br/to/myvw?country=BR"
+)
+
+_daily_sent_count: dict[str, int] = {}
+
+
+def _is_allowed_time() -> bool:
+    """Check if current time is within allowed send window (8h-18h BRT)."""
+    from datetime import datetime
+    import pytz
+    brt = pytz.timezone("America/Sao_Paulo")
+    now = datetime.now(brt)
+    return 8 <= now.hour < 18
+
+
+def _daily_count_key() -> str:
+    from datetime import date
+    return date.today().isoformat()
+
+
+def _get_daily_sent() -> int:
+    return _daily_sent_count.get(_daily_count_key(), 0)
+
+
+def _increment_daily_sent():
+    key = _daily_count_key()
+    _daily_sent_count[key] = _daily_sent_count.get(key, 0) + 1
+
+
 async def dispatch_whatsapp(contacts: list[dict], messages: list[str]) -> tuple[int, int]:
-    """Send WhatsApp messages with rate limiting. Returns (sent, failed)."""
+    """Send WhatsApp messages with rate limiting, time window and daily cap."""
     base_url = os.environ["EVOLUTION_API_URL"].rstrip("/")
     api_key = os.environ["EVOLUTION_API_KEY"]
     instance = os.environ["EVOLUTION_INSTANCE"]
 
+    max_daily = int(os.environ.get("CAMPAIGN_MAX_DAILY", "100"))
+    interval_secs = float(os.environ.get("CAMPAIGN_INTERVAL_SECS", "3"))
+
     sent = 0
     failed = 0
+    skipped_time = 0
+    skipped_cap = 0
 
     async with httpx.AsyncClient(timeout=15) as client:
         for contact, message in zip(contacts, messages):
+            if not _is_allowed_time():
+                skipped_time += 1
+                continue
+
+            if _get_daily_sent() >= max_daily:
+                skipped_cap += 1
+                continue
+
             try:
                 url = f"{base_url}/message/sendText/{instance}"
                 headers = {"apikey": api_key, "Content-Type": "application/json"}
@@ -145,9 +191,10 @@ async def dispatch_whatsapp(contacts: list[dict], messages: list[str]) -> tuple[
                 response = await client.post(url, json=payload, headers=headers)
                 response.raise_for_status()
                 sent += 1
+                _increment_daily_sent()
             except Exception:
                 failed += 1
-            # Rate limit: 1 message per second to avoid WhatsApp blocks
-            await asyncio.sleep(1)
+
+            await asyncio.sleep(interval_secs)
 
     return sent, failed
